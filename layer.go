@@ -1,26 +1,58 @@
 package main
 
+import (
+	"fmt"
+)
+
+type DenseOption func(*DenseDef)
+
 type Layer struct {
 	Neurons      []*Neuron
 	ErrsFromNext [][]chan float64
 	InsToNext    [][]chan float64
-	GetOutput    func() float64
 }
 
 type DenseDef struct {
-	InputNeurons int // only used if specified for the first Dense (the input layer)
-	Neurons      int // neurons for this Dense block
+	InputNeurons int
+	Neurons      int
+	Activation   ActivationFunc
+	Gradient     ActivationFunc
 	HasInputSpec bool
 }
 
-func Dense(args ...int) DenseDef {
-	if len(args) == 2 {
-		return DenseDef{InputNeurons: args[0], Neurons: args[1], HasInputSpec: true}
+func Activation(name string) DenseOption {
+	act, ok := activationMap[name]
+	if !ok {
+		panic(fmt.Sprintf("Missing activation function for constant: %s", name))
 	}
-	if len(args) == 1 {
-		return DenseDef{Neurons: args[0], HasInputSpec: false}
+
+	return func(d *DenseDef) {
+		d.Activation = act.fn
+		d.Gradient = act.df
 	}
-	panic("Dense expects 1 or 2 ints")
+}
+
+func Dense(neurons int, options ...DenseOption) DenseDef {
+	d := DenseDef{
+		Neurons:      neurons,
+		Activation:   linear,   // Default activation
+		Gradient:     dfLinear, // Default derivative
+		HasInputSpec: false,
+	}
+
+	// Apply all functional options
+	for _, opt := range options {
+		opt(&d)
+	}
+
+	return d
+}
+
+func InputDim(dim int) DenseOption {
+	return func(d *DenseDef) {
+		d.InputNeurons = dim
+		d.HasInputSpec = true
+	}
 }
 
 func NewInputLayer(m, n int) *Layer {
@@ -46,7 +78,7 @@ func NewInputLayer(m, n int) *Layer {
 	}
 }
 
-func NewLayer(errsToPrev, outsFromPrev [][]chan float64, outputNeurons int) *Layer {
+func NewLayer(errsToPrev, outsFromPrev [][]chan float64, outputNeurons int, f, df ActivationFunc) *Layer {
 	numNeurons := len(outsFromPrev)
 
 	layer := &Layer{
@@ -64,7 +96,7 @@ func NewLayer(errsToPrev, outsFromPrev [][]chan float64, outputNeurons int) *Lay
 			errsFromNext[i] = make(chan float64, BATCH)
 			insToNext[i] = make(chan float64, BATCH)
 		}
-		layer.Neurons[j] = NewNeuron(errsToPrev[j], outsFromPrev[j], errsFromNext, insToNext)
+		layer.Neurons[j] = NewNeuron(errsToPrev[j], outsFromPrev[j], errsFromNext, insToNext, f, df)
 		layer.ErrsFromNext[j] = errsFromNext
 		layer.InsToNext[j] = insToNext
 	}

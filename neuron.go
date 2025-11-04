@@ -1,6 +1,25 @@
 package main
 
-import "math/rand"
+import (
+	"math"
+	"math/rand"
+)
+
+const leak = 0.01
+
+var activationMap = map[string]struct {
+	fn ActivationFunc
+	df ActivationFunc
+}{
+	"linear":    {linear, dfLinear},
+	"sigmoid":   {sigmoid, dfSigmoid},
+	"relu":      {relu, dfRelu},
+	"leakyrelu": {leakyRelu, dfLeakyRelu},
+	"tanh":      {tanh, dfTanh},
+	"gelu":      {gelu, dfGelu},
+}
+
+type ActivationFunc func(float64) float64
 
 type Neuron struct {
 	Weights []float64
@@ -20,11 +39,7 @@ type Knowledge struct {
 	T     float64
 }
 
-// Linear activation and derivative
-func linear(x float64) float64   { return x }
-func dfLinear(x float64) float64 { return 1 }
-
-func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64) *Neuron {
+func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64, f, df ActivationFunc) *Neuron {
 	n := &Neuron{
 		Weights:      make([]float64, len(outsFromPrev)),
 		Bias:         0.0,
@@ -51,7 +66,7 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64)
 
 		// Store forward knowledge for backward use
 		ch <- Knowledge{Input: input, T: t}
-		return linear(t)
+		return f(t)
 	}
 
 	// Launch forward worker goroutine
@@ -76,7 +91,7 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64)
 			kw := <-ch
 
 			// compute local gradient
-			grad := dfLinear(kw.T)
+			grad := df(kw.T)
 
 			// wait for all incoming errors from front layer
 			errFront := 0.0
@@ -99,4 +114,71 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64)
 	}()
 
 	return n
+}
+
+// Activations and Derivatives
+func linear(x float64) float64 {
+	return x
+}
+
+func dfLinear(x float64) float64 {
+	return 1
+}
+
+func sigmoid(x float64) float64 {
+	return 1 / (1 + math.Exp(-x))
+}
+
+func dfSigmoid(x float64) float64 {
+	s := sigmoid(x)
+	return s * (1 - s)
+}
+
+func relu(x float64) float64 {
+	if x > 0 {
+		return x
+	}
+	return 0
+}
+
+func dfRelu(x float64) float64 {
+	if x > 0 {
+		return 1
+	}
+	return 0
+}
+
+func leakyRelu(x float64) float64 {
+	if x > 0 {
+		return x
+	}
+	return leak * x
+}
+
+func dfLeakyRelu(x float64) float64 {
+	if x > 0 {
+		return 1
+	}
+	return leak
+}
+
+func tanh(x float64) float64 {
+	return math.Tanh(x)
+}
+
+func dfTanh(x float64) float64 {
+	t := math.Tanh(x)
+	return 1 - t*t
+}
+
+func gelu(x float64) float64 {
+	return 0.5 * x * (1 + math.Tanh(math.Sqrt(2/math.Pi)*(x+0.044715*math.Pow(x, 3))))
+}
+
+func dfGelu(x float64) float64 {
+	// Approx derivative of GELU
+	const c = 0.0356774
+	const b = 0.797885
+	t := math.Tanh(b * (x + c*math.Pow(x, 3)))
+	return 0.5 * (1 + t + x*(1-t*t)*(b+3*b*c*x*x))
 }
