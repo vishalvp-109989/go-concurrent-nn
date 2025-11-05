@@ -2,92 +2,12 @@ package main
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"sort"
 	"strconv"
 )
-
-type SerializableNeuron struct {
-	Weights []float64 `json:"weights"`
-	Bias    float64   `json:"bias"`
-}
-
-type SerializableLayer struct {
-	Neurons []SerializableNeuron `json:"neurons"`
-}
-
-type SerializableNetwork struct {
-	Layers []SerializableLayer `json:"layers"`
-}
-
-func (net *Network) SaveWeights(filename string) error {
-	sn := SerializableNetwork{}
-
-	for _, layer := range net.Hidden {
-		sl := SerializableLayer{}
-		for _, neuron := range layer.Neurons {
-			sl.Neurons = append(sl.Neurons, SerializableNeuron{
-				Weights: neuron.Weights,
-				Bias:    neuron.Bias,
-			})
-		}
-		sn.Layers = append(sn.Layers, sl)
-	}
-
-	data, err := json.MarshalIndent(sn, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filename, data, 0644)
-}
-
-func (net *Network) LoadWeights(filename string) error {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		log.Println("Weights file not found, starting fresh.")
-		return nil
-	}
-
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	var sn SerializableNetwork
-	if err := json.Unmarshal(data, &sn); err != nil {
-		return err
-	}
-
-	// Copy values back into your network
-	for i, sl := range sn.Layers {
-		if i >= len(net.Hidden) {
-			return fmt.Errorf("mismatch: saved network has more layers (%d) than current network (%d)", len(sn.Layers), len(net.Hidden))
-		}
-		for j, snNeuron := range sl.Neurons {
-			if j >= len(net.Hidden[i].Neurons) {
-				return fmt.Errorf("mismatch: layer %d has more neurons in saved file (%d) than in current network (%d)",
-					i, len(sl.Neurons), len(net.Hidden[i].Neurons))
-			}
-
-			n := net.Hidden[i].Neurons[j]
-
-			if len(n.Weights) != len(snNeuron.Weights) {
-				return fmt.Errorf("weight mismatch at layer %d neuron %d: expected %d weights, got %d",
-					i, j, len(n.Weights), len(snNeuron.Weights))
-			}
-
-			// Safe to assign now
-			copy(n.Weights, snNeuron.Weights)
-			n.Bias = snNeuron.Bias
-		}
-	}
-
-	log.Println("Weights loaded successfully.")
-	return nil
-}
 
 // LoadCSV reads a CSV file and returns numeric features X and target Y.
 // It automatically converts categorical (string) features into one-hot encoded vectors.
@@ -214,4 +134,25 @@ func Softmax(activations []float64) []float64 {
 		out[i] = math.Exp(a) / expSum
 	}
 	return out
+}
+
+// Convert to One Hot Encoding
+func OneHotEncode(x float64, dim int) []float64 {
+	targetVector := make([]float64, dim)
+	if x >= 0 && x < float64(dim) {
+		targetVector[int(x)] = 1.0
+	}
+	return targetVector
+}
+
+func OneHotDecode(v []float64) float64 {
+	maxIndex := 0
+	maxValue := v[0]
+	for i, val := range v {
+		if val > maxValue {
+			maxValue = val
+			maxIndex = i
+		}
+	}
+	return float64(maxIndex)
 }

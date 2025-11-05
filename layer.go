@@ -60,7 +60,7 @@ func NewInputLayer(m, n int) *Layer {
 	for i := range m {
 		inToNext[i] = make([]chan float64, n)
 		for j := range n {
-			inToNext[i][j] = make(chan float64, BATCH) // buffered
+			inToNext[i][j] = make(chan float64, channelCapacity) // buffered
 		}
 	}
 
@@ -69,7 +69,7 @@ func NewInputLayer(m, n int) *Layer {
 		errsFromNext[i] = make([]chan float64, n)
 		for j := range n {
 			// Initialize channels to receive the final error signal from the first hidden layer
-			errsFromNext[i][j] = make(chan float64, BATCH)
+			errsFromNext[i][j] = make(chan float64, channelCapacity)
 		}
 	}
 	return &Layer{
@@ -93,8 +93,8 @@ func NewLayer(errsToPrev, outsFromPrev [][]chan float64, outputNeurons int, f, d
 		insToNext := make([]chan float64, outputNeurons)
 
 		for i := range outputNeurons {
-			errsFromNext[i] = make(chan float64, BATCH)
-			insToNext[i] = make(chan float64, BATCH)
+			errsFromNext[i] = make(chan float64, channelCapacity)
+			insToNext[i] = make(chan float64, channelCapacity)
 		}
 		layer.Neurons[j] = NewNeuron(errsToPrev[j], outsFromPrev[j], errsFromNext, insToNext, f, df)
 		layer.ErrsFromNext[j] = errsFromNext

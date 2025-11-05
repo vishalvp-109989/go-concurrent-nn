@@ -1,18 +1,26 @@
-# A Concurrent Neural Network in Go
+# Concurrent Neural Network in Go
 
 A from-scratch, fully concurrent neural network simulator in Go — each neuron runs two goroutines (one for feedforward, one for backprop) and communicates via channels, mimicking asynchronous biological signalling.
 
-This project is primarily an educational experiment to explore how Go's concurrency primitives can be used to model the parallel nature of a neural network's architecture.
+This project is an educational exploration of how Go's concurrency primitives can model the parallel, asynchronous behavior of biological neural networks.
 
-## Features
+---
 
-* **Concurrent Architecture:** Each neuron operates as an independent Goroutine, communicating with other neurons (and layers) using Go channels for inputs, outputs, and error signals.
+## 🚀 Features
+
+* **Concurrent Architecture:** Each neuron runs **two goroutines** — one for feedforward and another for backpropagating errors — communicating with other neurons (and layers) using Go channels for inputs, outputs, and error signals.
 * **Backpropagation:** Implements the standard backpropagation algorithm for training, fully utilizing the channel-based architecture.
-* **Weight Persistence:** Includes functionality to save and load trained weights using a JSON file (`weights.json`).
+* **Weight Persistence:** Includes functionality to save and load trained weights using a JSON file (weights.json).
 * **Data Handling:** Provides a utility function (`LoadCSV`) for loading training data from a CSV, including automatic handling and **one-hot encoding** of categorical features.
-* **Loss Functions:** Supports **Mean Squared Error (MSE)** for regression tasks (default) and **Cross-Entropy Loss** for classification (when `useCrossEntropy = true`).
+* **Loss Functions:** Supports
 
-## Getting Started
+  * **Mean Squared Error (MSE)** for regression tasks
+  * **Binary Cross Entropy (BCE)** for binary classification
+  * **Categorical Cross Entropy (CCE)** for multi-class classification
+
+---
+
+## 🧰 Getting Started
 
 ### Prerequisites
 
@@ -20,38 +28,164 @@ This project is primarily an educational experiment to explore how Go's concurre
 
 ### Installation
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/vishalvp-109989/go-concurrent-nn.git
-    cd go-concurrent-nn
-    go mod tidy
-    ```
+1. Clone the repository:
 
-2.  Acquire the sample data (e.g., a CSV named `data.csv`).
+   ```bash
+   git clone https://github.com/vishalvp-109989/go-rout-net.git
+   cd go-rout-net
+   go mod tidy
+   ```
 
-3.  Run the training process:
-    ```bash
-    go run .
-    ```
+2. Acquire the sample data (e.g., a CSV named `data.csv`).
 
-## Configuration
+3. Run the training process:
 
-Key parameters can be adjusted directly in `main.go`:
+   ```bash
+   go run .
+   ```
 
-| Constant | Description | Default Value |
-| :--- | :--- | :--- |
-| `learning_rate` | Controls the step size for weight updates. | `0.0001` |
-| `useCrossEntropy` | Toggles between **MSE (false)** and **Cross-Entropy (true)** loss. | `false` |
-| `K_CLASSES` | Number of classes for classification (only used with Cross-Entropy). | `1` |
-| `EPOCH` | Number of full passes over the training dataset. | `100` |
-| `BATCH` | Channel buffer size, acts as a micro-batching mechanism. | `1` |
+---
 
-The network structure is defined in `main.go`:
+## ⚙️ Configuration
+
+Key parameters and network structure can be adjusted directly in `main.go` using the `TrainingConfig` struct and layer definitions.
+
+### **Training Configuration**
 
 ```go
-network := NewNetwork(
-    Dense(16, inputDim), // Input dimension setup
-    Dense(8),    // First hidden layer with 8 neurons
-    Dense(4),    // Second hidden layer with 4 neurons
-    Dense(1),    // Output layer with 1 neuron (for regression)
+cfg := TrainingConfig{
+    Epochs:       100,       // Number of training epochs
+    BatchSize:    1,         // Channel buffer size (micro-batching)
+    LearningRate: 0.01,      // Step size for weight updates
+    LossFunction: CATEGORICAL_CROSS_ENTROPY, // Choose one of: MSE, CATEGORICAL_CROSS_ENTROPY, BINARY_CROSS_ENTROPY
+    KClasses:     2,         // Number of output classes (used only for categorical cross entropy)
+    VerboseEvery: 10,        // Print training progress every N epochs
+}
+```
+
+---
+
+## 🧠 Network Initialization Examples
+
+Below are examples of how to define the network and output layer for each supported loss function.
+
+### **1️⃣ Mean Squared Error (Regression)**
+
+Used for continuous value prediction tasks (e.g., predicting a number).
+
+```go
+nw := NewNetwork(
+    Dense(16, InputDim(inputDim), Activation("relu")),
+    Dense(8, Activation("relu")),
+    Dense(4, Activation("relu")),
+    Dense(1), // Single output neuron, linear is the default activation
 )
+
+cfg := TrainingConfig{
+    Epochs:       100,
+    BatchSize:    1,
+    LearningRate: 0.01,
+    LossFunction: MSE,
+    VerboseEvery: 10,
+}
+```
+
+---
+
+### **2️⃣ Categorical Cross Entropy (Multi-Class Classification)**
+
+Used when predicting **multiple classes** (e.g., softmax output).
+
+```go
+nw := NewNetwork(
+    Dense(16, InputDim(inputDim), Activation("relu")),
+    Dense(8, Activation("relu")),
+    Dense(4, Activation("relu")),
+    Dense(3), // Number of output classes
+)
+
+cfg := TrainingConfig{
+    Epochs:       100,
+    BatchSize:    1,
+    LearningRate: 0.01,
+    LossFunction: CATEGORICAL_CROSS_ENTROPY,
+    KClasses:     3,  // Must match output layer neurons
+    VerboseEvery: 10,
+}
+```
+
+> ✅ The final layer output is passed through softmax internally during loss computation, and the error used for backpropagation is derived after applying the softmax transformation, ensuring correct gradient flow for multi-class classification
+
+---
+
+### **3️⃣ Binary Cross Entropy (Binary Classification)**
+
+Used for **two-class** problems (e.g., predicting 0 or 1).
+
+```go
+nw := NewNetwork(
+    Dense(16, InputDim(inputDim), Activation("relu")),
+    Dense(8, Activation("relu")),
+    Dense(4, Activation("relu")),
+    Dense(1, Activation("sigmoid")), // Single neuron for binary probability
+)
+
+cfg := TrainingConfig{
+    Epochs:       100,
+    BatchSize:    1,
+    LearningRate: 0.01,
+    LossFunction: BINARY_CROSS_ENTROPY,
+    VerboseEvery: 10,
+}
+```
+
+> ✅ The output neuron produces a probability (0–1 range). Internally uses **sigmoid activation** and **binary cross-entropy** loss.
+
+---
+
+## 🧩 Summary of Configuration Options
+
+| Parameter      | Description                                          | Example                                                    |
+| -------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
+| `LossFunction` | Selects which loss to optimize                       | `MSE`, `CATEGORICAL_CROSS_ENTROPY`, `BINARY_CROSS_ENTROPY` |
+| `KClasses`     | Number of output classes (only for categorical loss) | `2`                                                        |
+| `Epochs`       | Total number of training iterations                  | `100`                                                      |
+| `BatchSize`    | Channel buffer size for micro-batching               | `1`                                                        |
+| `LearningRate` | Step size for weight updates                         | `0.01`                                                     |
+| `VerboseEvery` | Interval for logging progress                        | `10`                                                       |
+
+---
+
+## 🧾 Weight Saving & Persistence
+
+The network automatically saves trained weights to `weights.json` **on exit (Ctrl+C)** and **on program completion**, and reloads them when available:
+
+```go
+if err := nw.LoadWeights("weights.json"); err != nil {
+    log.Println("Error loading weights:", err)
+}
+```
+
+---
+
+## 📊 Example Output
+
+```
+Loaded dataset: 768 samples, 8 input features
+Epoch 10: Loss=0.50231, Accuracy=76.04%
+Epoch 20: Loss=0.41245, Accuracy=81.72%
+Final Evaluation: Loss=0.331021, Accuracy=85.47%
+Weights saved successfully.
+```
+
+---
+
+## 🧩 Loss Function Constants
+
+```go
+const (
+    MSE                       = iota // Mean Squared Error (Regression)
+    CATEGORICAL_CROSS_ENTROPY        // Multi-Class Classification
+    BINARY_CROSS_ENTROPY             // Binary Classification
+)
+```

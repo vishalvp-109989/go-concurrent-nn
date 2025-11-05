@@ -7,6 +7,12 @@ import (
 
 const leak = 0.01
 
+var (
+	learningRate    = 0.0001
+	channelCapacity = 1
+	batchSize       = 1
+)
+
 var activationMap = map[string]struct {
 	fn ActivationFunc
 	df ActivationFunc
@@ -43,7 +49,7 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64,
 	n := &Neuron{
 		Weights:      make([]float64, len(outsFromPrev)),
 		Bias:         0.0,
-		LR:           learning_rate,
+		LR:           learningRate,
 		ErrsToPrev:   errsToPrev,
 		ErrsFromNext: errsFromNext,
 		OutsFromPrev: outsFromPrev,
@@ -55,7 +61,7 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64,
 	}
 
 	// Channel for internal forward/backward knowledge
-	ch := make(chan Knowledge, BATCH)
+	ch := make(chan Knowledge, channelCapacity)
 
 	// Forward activation closure
 	Activate := func(input []float64) float64 {
@@ -65,7 +71,11 @@ func NewNeuron(errsToPrev, outsFromPrev, errsFromNext, insToNext []chan float64,
 		}
 
 		// Store forward knowledge for backward use
-		ch <- Knowledge{Input: input, T: t}
+		select {
+		case ch <- Knowledge{Input: input, T: t}:
+		default:
+			// log.Println("Failed to store knowledge")
+		}
 		return f(t)
 	}
 
